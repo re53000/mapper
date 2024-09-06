@@ -1,121 +1,103 @@
-import { Map as MapLibreMap, NavigationControl, StyleSpecification, Marker, Popup } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { Map as MapLibreMap, NavigationControl, StyleSpecification, Marker, Popup, LngLat } from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './Mapper.css'
 
+type Point = {
+  name: string,
+  position: LngLat
+  markerColor?: string
+}
+
 const OSM_STYLE: StyleSpecification = {
-  "version": 8,
-  "sources": {
-    "osm": {
-      "type": "raster",
-      "tiles": ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      "tileSize": 256,
-      "attribution": "",
+  version: 8,
+  sources: {
+    osm: {
+      type: "raster",
+      tiles: ["https://a.tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "",
     }
   },
-  "layers": [
+  layers: [
     {
-      "id": "osm",
-      "type": "raster",
-      "source": "osm" // This must match the source key above
+      id: "osm",
+      type: "raster",
+      source: "osm" // This must match the source key above
     }
   ]
 };
 
-// https://stackblitz.com/edit/react-maplibre-map-daapft?file=my-map%2FmyMap.tsx
-// https://codepen.io/bothness/pen/ExgwzEG
-// https://codesandbox.io/p/sandbox/maplibre-react-typescript-4e104s
+const INITIAL_STATE = {
+  lng: 37.55,
+  lat: 55.71,
+  zoom: 11,
+};
+
+const ROUTE: Point[] = [{
+  name: 'start',
+  position: new LngLat(...[37.553589367657935, 55.715773776860885])
+},{
+  name: 'finish',
+  position: new LngLat(...[37.60036171391039, 55.72761426861828]),
+  markerColor: '#ff6347'
+}]
+
 export const Mapper = () => {
   const mapContainer = useRef(null);
-
-  const initialState = {
-    lng: 11,
-    lat: 49,
-    zoom: 4,
-  };
+  const [map, setMap] = useState<MapLibreMap>()
 
   useEffect(() => {
+    // draw the route
+    if (!map) {
+      return
+    }
+    ROUTE.map(({name, position, markerColor: color}) => {
+      new Marker({
+        color,
+        draggable: true
+      })
+      .setLngLat(position)
+      .setPopup(new Popup({closeOnClick: false}).setHTML(`<h3>${name}</h3>`))
+      .addTo(map);
+    })
+  },[map])
+
+  useEffect(() => {
+    // mount map to the container
     if (!mapContainer.current) {
       return
     }
 
-    const map = new MapLibreMap({
+    const libreMap = new MapLibreMap({
       container: mapContainer.current,
-      center: [initialState.lng, initialState.lat],
-      zoom: initialState.zoom,
+      center: [INITIAL_STATE.lng, INITIAL_STATE.lat],
+      zoom: INITIAL_STATE.zoom,
       style: OSM_STYLE,
     });
 
     const nav = new NavigationControl({
       visualizePitch: true
     });
-    map.addControl(nav, "top-left");
 
-    new Marker()
-      .setLngLat([11, 49])
-      .addTo(map);
+    libreMap.addControl(nav, "top-left");
+    setMap(libreMap)
+  }, []);
 
-    new Marker().setLngLat([2.349902, 48.852966]).addTo(map);
-
-
-    const el = document.createElement("div");
-    el.addEventListener("click", () => {
-      window.alert("Eiffel Tower");
+  const listenPosition = () => {
+    map?.on("click", (e) => {
+      console.log(e);
+      console.log([e.lngLat.lng, e.lngLat.lat]);
     });
-
-    // add marker to map
-    new Marker({
-      className: "marker",
-      element: el,
-    })
-      .setLngLat([2.294694, 48.858093])
-      .addTo(map);
-
-
-    // https://www.jawg.io/docs/integration/maplibre-gl-js/add-popup/
-    // https://maplibre.org/maplibre-gl-js/docs/examples/custom-marker-icons/
-    // Basic popup definition
-    new Popup({
-      closeOnClick: false,
-    })
-      .setLngLat([-61.572646, 16.273131])
-      .setHTML("<b>Hello world!</b><br/> I am a popup.")
-      .addTo(map);
-
-
-    // const marker = new maptilersdk.Marker({
-    //   color: "#FFFFFF",
-    //   draggable: true
-    // }).setLngLat([30.5, 50.5])
-    // .addTo(map);
-
-    // // @ts-expect-error for debugging
-    // window.map = map;
-
-    // map.on("click", (e) => {
-    //   console.log(e);
-    //   console.log([e.lngLat.lng, e.lngLat.lat]);
-    // });
-  }, [mapContainer.current]);
-
-  const onLoad = () => {
-    if (mapContainer.current) {
-      console.log('HERE');
-
-      new Marker()
-        .setLngLat([11, 49])
-        .addTo(mapContainer.current);
-
-      // const pinImage = new Image();
-      // pinImage.onload = () => {
-      //   if (!mapContainer.current.hasImage('pin')) {
-      //     mapContainer.current.addImage('pin', pinImage, { sdf: true });
-      //   }
-      // }
-      // pinImage.src = pin; // pin is your svg import
-    }
   }
 
-  // NOTE: instead of ref we can just use id="central-map"
-  return <div className="map-container" ref={mapContainer} onLoad={onLoad}></div>;
+  useEffect(() => {
+    // register position listener
+    map?.on('load', listenPosition)
+    return () => {
+      map?.off('load', listenPosition)
+    }
+  })
+  
+  return <div className="map-container" ref={mapContainer}></div>;
 }
