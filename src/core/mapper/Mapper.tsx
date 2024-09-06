@@ -37,7 +37,7 @@ const INITIAL_STATE = {
 const ROUTE: Point[] = [{
   name: 'start',
   position: new LngLat(...[37.553589367657935, 55.715773776860885])
-},{
+}, {
   name: 'finish',
   position: new LngLat(...[37.60036171391039, 55.72761426861828]),
   markerColor: '#ff6347'
@@ -52,16 +52,16 @@ export const Mapper = () => {
     if (!map) {
       return
     }
-    ROUTE.map(({name, position, markerColor: color}) => {
+    ROUTE.map(({ name, position, markerColor: color }) => {
       new Marker({
         color,
         draggable: true
       })
-      .setLngLat(position)
-      .setPopup(new Popup({closeOnClick: false}).setHTML(`<h3>${name}</h3>`))
-      .addTo(map);
+        .setLngLat(position)
+        .setPopup(new Popup({ closeOnClick: false }).setHTML(`<h3>${name}</h3>`))
+        .addTo(map);
     })
-  },[map])
+  }, [map])
 
   useEffect(() => {
     // mount map to the container
@@ -74,6 +74,10 @@ export const Mapper = () => {
       center: [INITIAL_STATE.lng, INITIAL_STATE.lat],
       zoom: INITIAL_STATE.zoom,
       style: OSM_STYLE,
+      transformRequest: (url) => ({
+        url,
+        headers: { "Accept-Language": "en-US,en;q=0.5", }
+      })
     });
 
     const nav = new NavigationControl({
@@ -98,6 +102,44 @@ export const Mapper = () => {
       map?.off('load', listenPosition)
     }
   })
-  
-  return <div className="map-container" ref={mapContainer}></div>;
+
+  const [currentPosition, setCurrentPosition] = useState<GeolocationPosition>()
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!currentPosition?.coords || !map) {
+      return
+    }
+
+    const { latitude, longitude } = currentPosition.coords
+    const position = new LngLat(...[longitude, latitude])
+    
+    map.setCenter(position)
+    new Marker()
+      .setLngLat(position)
+      .addTo(map)
+
+  }, [currentPosition?.coords, map])
+
+  const successPositionCallback = (e: GeolocationPosition) => {
+    setCurrentPosition(e)
+    setIsLoading(false)
+  }
+
+  const errorPositionCallback = (e: GeolocationPositionError) => {
+    console.error('Failed to find you', e.message);
+    setIsLoading(false)
+  }
+
+  const onGetCurrentPositionClick = () => {
+    setIsLoading(true)
+    navigator.geolocation.getCurrentPosition(successPositionCallback, errorPositionCallback)
+  }
+
+  return (
+    <section className="map-section">
+      <div className="map-container" ref={mapContainer}></div>
+      <button onClick={onGetCurrentPositionClick}>{isLoading ? `Finding you ...` : `Find me`}</button>
+    </section>
+  )
 }
